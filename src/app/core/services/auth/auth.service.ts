@@ -10,7 +10,7 @@ import { tap } from 'rxjs';
 })
 export class AuthService {
   private api = inject(ApiService);
-  private token = fromStorage('token');
+  private token = useStorage('token');
   private router = inject(Router);
   private store = null;
 
