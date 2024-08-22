@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { StorageService } from './storage.service';
 
-export const fromStorage = <T>(storageKey: string) => {
+export const useStorage = <T>(storageKey: string) => {
   const storage = inject(StorageService);
   const initialValue = storage.getItem<T>(storageKey);
   const fromStorageSignal = signal<T | null>(initialValue);

@@ -1,7 +1,7 @@
 import { DestroyRef } from '@angular/core';
 import { StorageService } from './storage.service';
 import { TestBed } from '@angular/core/testing';
-import { fromStorage } from './from-storage.function';
+import { useStorage } from './use-storage.function';
 
 describe(' fromStorage', () => {
   let storageService: jasmine.SpyObj<StorageService>;
@@ -32,7 +32,7 @@ describe(' fromStorage', () => {
       const storageKey = 'testKey';
       const storedValue = 'testValue';
       storageService.getItem.and.returnValue(storedValue);
-      const signal = fromStorage<string>(storageKey);
+      const signal = useStorage<string>(storageKey);
       expect(signal()).toBe(storedValue);
     });
   });
@@ -45,7 +45,7 @@ describe(' fromStorage', () => {
 
       storageService.getItem.and.returnValue(initialValue);
 
-      const signal = fromStorage<string>(storageKey);
+      const signal = useStorage<string>(storageKey);
       signal.set(newValue);
 
       expect(signal()).toBe(newValue);
