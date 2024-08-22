@@ -3,7 +3,7 @@ import { StorageService } from './storage.service';
 import { TestBed } from '@angular/core/testing';
 import { useStorage } from './use-storage.function';
 
-describe(' fromStorage', () => {
+describe('useStorage', () => {
   let storageService: jasmine.SpyObj<StorageService>;
   let destroyRef: jasmine.SpyObj<DestroyRef>;
 
