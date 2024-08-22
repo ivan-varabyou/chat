@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
-import { STORAGE, StorageService } from './storage.service';
+import { StorageService } from './storage.service';
+import { STORAGE } from './storage.tocken';
 
 describe('StorageService', () => {
   const key = 'theme';

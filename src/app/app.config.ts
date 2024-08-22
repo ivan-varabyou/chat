@@ -8,7 +8,6 @@ import {
   HTTP_INTERCEPTORS,
   provideHttpClient,
   withFetch,
-  withInterceptors,
 } from '@angular/common/http';
 import { AuthInterceptor } from './core/interceptor/auth.interceptor';
 

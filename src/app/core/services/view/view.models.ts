@@ -1,5 +1,4 @@
-export type ViewType = 'friendList' | 'chatList' | 'chatWindow';
-export enum View {
+export const enum View {
   friendList,
   chatList,
   chatWindow,
