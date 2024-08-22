@@ -1,8 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
 import { STORAGE, StorageService } from './storage.service';
-import { fromStorage } from './from-storage.function';
-import { WritableSignal } from '@angular/core';
 
 describe('StorageService', () => {
   const key = 'theme';
