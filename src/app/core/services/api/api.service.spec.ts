@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import {
-  HttpClientTestingModule,
   HttpTestingController,
+  provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ApiService } from './api.service';
-import { HttpParams } from '@angular/common/http';
+import { HttpParams, provideHttpClient } from '@angular/common/http';
 import { API_URL } from './api-url.token';
 
 describe('ApiService', () => {
@@ -14,8 +14,12 @@ describe('ApiService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [ApiService, { provide: API_URL, useValue: apiUrl }],
+      providers: [
+        ApiService,
+        { provide: API_URL, useValue: apiUrl },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     });
     service = TestBed.inject(ApiService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -30,12 +34,15 @@ describe('ApiService', () => {
   });
 
   it('should perform GET request', () => {
-    const dummyData = { name: 'Test' };
-    service.get('/test').subscribe((data) => {
+    const url = '/test';
+
+    const dummyData = { name: 'Test data' };
+
+    service.get(url).subscribe((data) => {
       expect(data).toEqual(dummyData);
     });
 
-    const req = httpMock.expectOne(`${apiUrl}/test`);
+    const req = httpMock.expectOne(`${apiUrl}${url}`);
     expect(req.request.method).toBe('GET');
     req.flush(dummyData);
   });
