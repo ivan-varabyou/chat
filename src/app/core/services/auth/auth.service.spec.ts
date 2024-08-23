@@ -9,7 +9,8 @@ import { Router } from '@angular/router';
 import { AuthData } from './auth.models';
 import { API_URL } from '../api/api-url.token';
 import { provideHttpClient } from '@angular/common/http';
-import { STORAGE, StorageService } from '../storage/storage.service';
+import { StorageService } from '../storage/storage.service';
+import { STORAGE } from '../storage/storage.tocken';
 
 describe('AuthService', () => {
   let service: AuthService;
