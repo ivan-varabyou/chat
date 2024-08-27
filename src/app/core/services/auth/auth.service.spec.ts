@@ -51,7 +51,7 @@ describe('AuthService', () => {
 
     service.login(mockData).subscribe((data) => {
       expect(data).toEqual(mockResponse);
-      expect(service.getTocken()).toEqual(mockResponse.token);
+      expect(service.getToken()).toEqual(mockResponse.token);
     });
 
     const req = httpMock.expectOne(`${apiUrl}${url}`);
@@ -61,7 +61,7 @@ describe('AuthService', () => {
 
   it('should logout and clear token', () => {
     service.logout();
-    expect(service.getTocken()).toEqual('');
+    expect(service.getToken()).toEqual('');
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
   });
 

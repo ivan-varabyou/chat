@@ -188,7 +188,7 @@ export class WebsocketService<T, W> extends ComponentStore<
   /*
    * on message to server
    * */
-  public readonly send = (event: WSEvent, data: any = {}) =>
+  public readonly send = (event: string, data: any = {}) =>
     this.effect((trigger$) =>
       trigger$.pipe(
         withLatestFrom(this.isConnected$, this.socket$),

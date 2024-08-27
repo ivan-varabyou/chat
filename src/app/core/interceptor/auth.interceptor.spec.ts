@@ -24,7 +24,7 @@ describe('authInterceptor', () => {
         {
           provide: AuthService,
           useValue: {
-            getTocken: jasmine.createSpy('getTocken').and.returnValue('12345'),
+            getToken: jasmine.createSpy('getToken').and.returnValue('12345'),
           },
         },
         { provide: API_URL, useValue: apiUrl },
@@ -64,7 +64,7 @@ describe('authInterceptor', () => {
   });
 
   it('should proceed without Authorization header if token is not available', () => {
-    (authService.getTocken as jasmine.Spy).and.returnValue(null);
+    (authService.getToken as jasmine.Spy).and.returnValue(null);
     apiService.get('/test').subscribe();
 
     const req = httpMock.expectOne(`${apiUrl}/test`);

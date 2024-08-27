@@ -1,4 +1,3 @@
-import { routes } from './../../../app.routes';
 import { Inject, Injectable } from '@angular/core';
 import { ComponentStore } from '@ngrx/component-store';
 import {
@@ -90,7 +89,7 @@ export class WebsocketNgrxService extends ComponentStore<
     map(([, queue]) => queue)
   );
 
-  private readonly setUpWebSocketSubjectConfig = this.effect((trigger$) => {
+  private readonly setUpWebSocketSubjectConfig = this.effect((trigger$) =>
     trigger$.pipe(
       withLatestFrom(this.baseUrl$),
       tap(([, baseUrl]) => {
@@ -124,8 +123,8 @@ export class WebsocketNgrxService extends ComponentStore<
           wsSubjectConfig: config,
         });
       })
-    );
-  });
+    )
+  );
 
   /**
    * Attempts to connect to the websocket.

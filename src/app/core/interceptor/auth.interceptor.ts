@@ -17,7 +17,7 @@ export class AuthInterceptor implements HttpInterceptor {
     req: HttpRequest<any>,
     next: HttpHandler
   ): Observable<HttpEvent<any>> {
-    const token = this.authService.getTocken();
+    const token = this.authService.getToken();
     const skipUrls = ['/login', '/register'];
     const skip = skipUrls.some((skipUrl) => req.url.includes(skipUrl));
 
