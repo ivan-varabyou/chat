@@ -12,28 +12,27 @@ export class AuthService {
   private api = inject(ApiService);
   private token = useStorage('token');
   private router = inject(Router);
-  private store = null;
 
-  login(data: AuthData) {
+  public login(data: AuthData) {
     return this.api
       .post<{ token: string }, AuthData>('/login', data)
       .pipe(tap((res) => this.token.set(res.token)));
   }
 
-  logout() {
+  public logout() {
     this.token.set('');
     this.router.navigate(['/login']);
   }
 
-  register(data: AuthData) {
+  public register(data: AuthData) {
     return this.api.post('/register', data);
   }
 
-  getTocken() {
+  public getToken() {
     return this.token();
   }
 
-  isLoggedIn() {
+  public isLoggedIn() {
     return !!this.token();
   }
 }
