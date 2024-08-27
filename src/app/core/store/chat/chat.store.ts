@@ -2,7 +2,6 @@ import { withDevtools } from '@angular-architects/ngrx-toolkit';
 import {
   SignalState,
   signalStore,
-  SignalStoreFeature,
   withComputed,
   withHooks,
   withMethods,

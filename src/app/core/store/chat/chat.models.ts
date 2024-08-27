@@ -51,3 +51,26 @@ export interface ChatState {
   privateMessages: PrivateMessage[];
   unreadCounts: { [room: string]: number };
 }
+
+export const enum WSEvent {
+  message = 'message',
+  privateMessage = 'privateMessage',
+  markAsRead = 'markAsRead',
+  recallMessage = 'recallMessage',
+  onlineUsers = 'onlineUsers',
+  messageHistory = 'messageHistory',
+  messageRecalled = 'messageRecalled',
+  messageUndoRecalled = 'messageUndoRecalled',
+  privateMessageRead = 'privateMessageRead',
+  messagesReadByUpdated = 'messagesReadByUpdated',
+  updateUserList = 'updateUserList',
+  unreadMessages = 'unreadMessages',
+  initializationComplete = 'initializationComplete',
+}
+
+export interface WsConfig {
+  baseUrl: string;
+  retrySeconds: number;
+  maxRetries: number;
+  debugMode: boolean;
+}

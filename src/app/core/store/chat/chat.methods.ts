@@ -1,29 +1,28 @@
-import { patchState, SignalState } from '@ngrx/signals';
+import { getState, patchState } from '@ngrx/signals';
 import {
   UserInfo,
   User,
-  WSSendMessage,
-  WSSendRead,
-  SendEvent,
+  WSEvent,
   ChatType,
+  ChatStatus,
+  WsConfig,
 } from './chat.models';
 import { inject } from '@angular/core';
 import { UserService } from '../../services/user/user.service';
 import { AuthService } from '../../services/auth/auth.service';
 import { firstValueFrom } from 'rxjs';
-import { WEBSOCKET_URL } from '../../services/websocket/websocket.tocken';
 import { WebsocketService } from '../../services/websocket/websocket.service';
-import { WebSocketSubject } from 'rxjs/webSocket';
 import { initialState, SignalChatStoreAndComputed } from './chat.store';
+import { WEBSOCKET_CONFIG } from '../../services/websocket/websocket.tocken';
 
 export const methodsChat = (store: SignalChatStoreAndComputed) => {
   const ws = inject(WebsocketService);
+  const wsConfig = inject(WEBSOCKET_CONFIG) as WsConfig;
 
   const connectWebSocket = async () => {
     const authService = inject(AuthService);
     const userService = inject(UserService);
-    const wsUrl = inject(WEBSOCKET_URL);
-    const tocken = authService.getTocken();
+    const token = authService.getToken();
     try {
       // Get information about user
       const userInfo = (await firstValueFrom(
@@ -37,20 +36,161 @@ export const methodsChat = (store: SignalChatStoreAndComputed) => {
       console.error('Error connecting to web socket');
     }
 
-    const socket = ws.connect(wsUrl);
+    const config = {
+      ...wsConfig,
+      baseUrl: `${wsConfig.baseUrl}?token=${token}`,
+    };
 
-    console.log('connectWebSocket Message: ', ws.message());
-  };
+    ws.connect(config);
 
-  const disconnectWebSocket = () => {
-    if (!ws.isConnected) return;
-    ws.close();
+    ws.messages$.subscribe((message) => {
+      const { event, data } = message;
+      switch (event) {
+        case 'initializationComplete':
+          console.log('initializationComplete chatStore', getState(store));
+          break;
+        case WSEvent.onlineUsers:
+          patchState(store, {
+            users: store.users().map((user) => {
+              const isOnline = message.data.users.find(
+                (id: string) => id === user.username
+              );
+              return {
+                ...user,
+                isSocketStable: true,
+                status: isOnline ? ChatStatus.online : ChatStatus.offline,
+              };
+            }),
+          });
+          break;
+        case WSEvent.messageHistory:
+          if (data.room === ChatType.general) {
+            patchState(store, {
+              generalMessages: data.messages,
+            });
+          }
+
+          if (data.room === ChatType.private) {
+            patchState(store, {
+              privateMessages: data.messages,
+            });
+          }
+          break;
+        case WSEvent.message:
+          patchState(store, {
+            generalMessages: [...store.generalMessages(), data.message],
+          });
+          break;
+        case WSEvent.privateMessage:
+          patchState(store, {
+            privateMessages: [...store.privateMessages(), data.message],
+          });
+          break;
+        case WSEvent.unreadMessages:
+          patchState(store, (state) => ({
+            unreadCounts: {
+              ...state.unreadCounts,
+              [data.room]: data.count,
+            },
+          }));
+          break;
+        case WSEvent.updateUserList:
+          store.disableAutoScroll();
+          patchState(store, { users: data });
+          store.enableAutoScroll();
+          break;
+
+        case WSEvent.messageRecalled:
+          patchState(store, {
+            generalMessages: store.generalMessages().map((msg) => {
+              if (msg.id === message.data.id) {
+                return {
+                  ...message.data,
+                };
+              }
+              return msg;
+            }),
+            privateMessages: store.privateMessages().map((msg) => {
+              if (
+                msg.id === message.data.id &&
+                msg.room === message.data.room
+              ) {
+                return {
+                  ...message.data,
+                };
+              }
+              return msg;
+            }),
+          });
+          store.enableAutoScroll();
+          break;
+        case WSEvent.messageUndoRecalled:
+          patchState(store, {
+            generalMessages: store.generalMessages().map((msg) => {
+              if (msg.id === message.data.id) {
+                return {
+                  ...message.data,
+                };
+              }
+              return msg;
+            }),
+            privateMessages: store.privateMessages().map((msg) => {
+              if (
+                msg.id === message.data.id &&
+                msg.room === message.data.room
+              ) {
+                return {
+                  ...message.data,
+                };
+              }
+              return msg;
+            }),
+          });
+          store.enableAutoScroll();
+          break;
+        case WSEvent.privateMessageRead:
+          store.disableAutoScroll();
+          patchState(store, {
+            privateMessages: store.privateMessages().map((msg) => {
+              if (msg.room === message.data.room) {
+                return {
+                  ...msg,
+                  isRead: true,
+                };
+              }
+              return msg;
+            }),
+          });
+          store.enableAutoScroll();
+          break;
+        case WSEvent.messagesReadByUpdated:
+          store.disableAutoScroll();
+          patchState(store, {
+            generalMessages: store.generalMessages().map((msg) => {
+              const findUpdated = message.data.find(
+                (data: { id: string }) => data.id === msg.id
+              );
+              if (findUpdated) {
+                return {
+                  ...msg,
+                  readBy: findUpdated.readBy,
+                };
+              }
+              return msg;
+            }),
+          });
+          store.enableAutoScroll();
+          break;
+        default:
+          break;
+      }
+    });
   };
 
   const sendGeneralMessage = (message: string, replyToMessageId?: string) => {
-    if (!ws.isConnected) return;
-    ws.send<WSSendMessage>({
-      event: SendEvent.message,
+    if (!ws.isConnected()) return;
+    ws.send({
+      event: WSEvent.message,
       data: {
         room: 'general',
         message: message,
@@ -61,8 +201,8 @@ export const methodsChat = (store: SignalChatStoreAndComputed) => {
   };
   const sendPrivateMessage = (message: string, replyToMessageId?: string) => {
     if (!ws.isConnected) return;
-    ws.send<WSSendMessage>({
-      event: SendEvent.privateMessage,
+    ws.send({
+      event: WSEvent.privateMessage,
       data: {
         to: store.currentChatPartner()?.username,
         message: message,
@@ -74,8 +214,8 @@ export const methodsChat = (store: SignalChatStoreAndComputed) => {
 
   const markAsRead = (room: string, type: ChatType) => {
     if (!ws.isConnected) return;
-    ws.send<WSSendRead>({
-      event: SendEvent.markAsRead,
+    ws.send({
+      event: WSEvent.markAsRead,
       data: {
         room,
         type,
@@ -98,8 +238,8 @@ export const methodsChat = (store: SignalChatStoreAndComputed) => {
 
   const recallMessage = (room: string, id: any) => {
     if (!ws.isConnected) return;
-    ws.send<WSSendRead>({
-      event: SendEvent.recallMessage,
+    ws.send({
+      event: WSEvent.recallMessage,
       data: {
         room,
         id,
@@ -110,14 +250,19 @@ export const methodsChat = (store: SignalChatStoreAndComputed) => {
 
   const undoRecallMessage = (room: string, id: any) => {
     if (!ws.isConnected) return;
-    ws.send<WSSendRead>({
-      event: SendEvent.recallMessage,
+    ws.send({
+      event: WSEvent.recallMessage,
       data: {
         room,
         id,
       },
     });
     store.disableAutoScroll();
+  };
+
+  const disconnectWebSocket = () => {
+    ws.disconnect();
+    patchState(store, initialState);
   };
 
   const setCurrentRoom = (room: string) =>
