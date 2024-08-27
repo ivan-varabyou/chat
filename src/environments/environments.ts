@@ -3,6 +3,9 @@ export const environment = {
   apiUrl: 'https://chat-app-backend-9ma9.onrender.com/api',
   profileImageApi: 'https://api.dicebear.com/8.x/pixel-art/svg?seed=J_',
   wsConfig: {
-    url: 'wss://chat-app-backend-9ma9.onrender.com',
+    baseUrl: 'wss://chat-app-backend-9ma9.onrender.com',
+    retrySeconds: 5,
+    maxRetries: 30,
+    debugMode: true,
   },
 };

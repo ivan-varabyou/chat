@@ -97,7 +97,7 @@ export class WebsocketService implements IWebsocketService {
       },
       (error: ErrorEvent) => {
         if (!this.websocket$) {
-          // this.reconnect()
+          this.reconnect();
         }
       },
       () => console.log('WebSocket connection closed!')
