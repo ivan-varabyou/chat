@@ -16,14 +16,15 @@ import { ChatStore } from '../../../../core/store/chat/chat.store';
 })
 export class ImageUploadComponent {
   @ViewChild('uploadInput', { read: ElementRef })
-  uploadInput!: ElementRef<HTMLInputElement>;
-  cdr = inject(ChangeDetectorRef);
-  store = inject(ChatStore);
+  private readonly uploadInput!: ElementRef<HTMLInputElement>;
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly store = inject(ChatStore);
 
-  upload = output<string>();
+  public upload = output<string>();
+  protected hasUserName = !this.store.currentChatPartner()?.username;
 
-  selectedFile: File | null = null;
-  base64String: string | null = null;
+  private selectedFile: File | null = null;
+  protected base64String: string | null = null;
 
   protected readonly onFileSelected = (event: Event) => {
     const fileInput = event.target as HTMLInputElement;

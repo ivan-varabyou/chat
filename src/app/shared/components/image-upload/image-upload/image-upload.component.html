@@ -7,7 +7,7 @@
     accept="image/jpeg,image/png,image/gif,image/bmp,image/svg+xml,image/webp"
   />
   <button
-    [disabled]="!store.currentChatPartner()?.username"
+    [disabled]="hasUserName"
     (click)="onUpload()"
     class="flex items-center justify-center w-10 h-10 ml-2 text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
   >
