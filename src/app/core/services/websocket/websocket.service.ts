@@ -1,7 +1,12 @@
+import { SocketStatsState } from './../websocket-ngrx/socket-stats-store.services.models';
 import { Inject, inject, Injectable, signal } from '@angular/core';
 import {
   BehaviorSubject,
+  catchError,
+  combineLatest,
   distinctUntilChanged,
+  EMPTY,
+  exhaustMap,
   filter,
   interval,
   map,
@@ -10,7 +15,11 @@ import {
   share,
   Subject,
   SubscriptionLike,
+  switchMap,
   takeWhile,
+  tap,
+  timer,
+  withLatestFrom,
 } from 'rxjs';
 import { WebSocketSubject, WebSocketSubjectConfig } from 'rxjs/webSocket';
 import { WebsocketFactoryService } from './websocket-factory.services';
@@ -19,117 +28,150 @@ import {
   WsMessage,
   WebSocketConfig,
   WSEvent,
+  SocketState,
+  WsConfig,
 } from './websoket.model';
 import { WEBSOCKET_CONFIG } from './websocket.tocken';
+import { ComponentStore } from '@ngrx/component-store';
+import { trigger } from '@angular/animations';
+import { SocketStatsStore } from './socket-stats-store.services';
+import { assertDefined } from '../../utils/assert/assert';
 
 @Injectable({
   providedIn: 'root',
 })
-export class WebsocketService implements IWebsocketService {
-  private config: WebSocketSubjectConfig<WsMessage>;
-  private websocketSub: SubscriptionLike;
-  private statusSub: SubscriptionLike;
+export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
+  public statStore = inject(SocketStatsStore);
+  // select
+  private readonly baseUrl$ = this.select((state) => state.baseUrl);
+  private readonly retrySeconds$ = this.select((state) => state.retrySeconds);
+  private readonly maxRetries$ = this.select((state) => state.maxRetries);
+  private readonly wsSubjectConfig$ = this.select(
+    (state) => state.wsSubjectConfig
+  );
+  /**
+   * A stream of messages received from the websocket
+   */
+  private messages = new Subject<WsMessage>();
+  private readonly messages$ = this.messages.asObservable();
+  private readonly isConnected$ = this.statStore.isConnected$;
+  private readonly socket$ = this.select((state) => state.socket);
+  private webSocket!: WebSocketSubject<WsMessage<any>>;
 
-  private reconnection$: Observable<number> | null = null;
-  private websocket$: WebSocketSubject<WsMessage> | null = null;
+  private readonly debugMode = (msg: string, ...args: any): void => {
+    if (this.wsConfig.debugMode) {
+      console.log(msg, ...args);
+    }
+  };
 
-  private connection$: BehaviorSubject<boolean> = new BehaviorSubject(false);
-  private wsMessage$: Subject<WsMessage>;
-
-  private reconnectInterval: number;
-  private reconnectAttempts: number;
-  private isConnected: boolean | undefined;
-
-  public status: Observable<boolean>;
-
-  constructor(@Inject(WEBSOCKET_CONFIG) private wsConfig: WebSocketConfig) {
-    this.wsMessage$ = new Subject<WsMessage>();
-    this.reconnectInterval = wsConfig.reconnectInterval || 5000;
-    this.reconnectAttempts = wsConfig.reconnectAttempts || 10;
-
-    this.config = {
-      url: wsConfig.url,
-      closeObserver: {
-        next: (event: CloseEvent) => {
-          this.websocket$ = null;
-          this.connection$.next(false);
-        },
-      },
-      openObserver: {
-        next: (event: Event) => {
-          console.log('WebSocket connected!');
-          this.connection$.next(true);
-        },
-      },
-    };
-    // connction status
-    this.status = new Observable<boolean>().pipe(
-      share(),
-      distinctUntilChanged()
-    );
-
-    // run reconnect if not connection
-    this.statusSub = this.status.subscribe((isConnected) => {
-      this.isConnected = isConnected;
-      if (
-        !this.reconnection$ &&
-        typeof isConnected === 'boolean' &&
-        !isConnected
-      ) {
-        // this.reconnect()
-      }
+  constructor(@Inject(WEBSOCKET_CONFIG) private wsConfig: WsConfig) {
+    super({
+      baseUrl: wsConfig.baseUrl,
+      retrySeconds: wsConfig.retrySeconds || 5,
+      maxRetries: wsConfig.maxRetries || 10,
+      debugMode: wsConfig.debugMode || false,
     });
-
-    this.websocketSub = this.wsMessage$.subscribe(null, (error: ErrorEvent) =>
-      console.error('WebSocket error!', error)
-    );
+    this.statStore.setConnected(false);
+    this.setUpWebSocketConfig();
 
     // start connection websocket
     this.connect();
   }
 
-  private connect(): void {
-    this.websocket$ = new WebSocketSubject(this.config);
+  private readonly setUpWebSocketConfig = this.effect((trigger$) =>
+    trigger$.pipe(
+      withLatestFrom(this.baseUrl$),
+      tap(([, baseUrl]) => {
+        this.debugMode('Websocket baseUrl', baseUrl);
 
-    this.websocket$.subscribe(
-      (message: WsMessage) => {
-        this.wsMessage$.next(message);
-      },
-      (error: ErrorEvent) => {
-        if (!this.websocket$) {
-          this.reconnect();
+        const config: WebSocketSubjectConfig<WsMessage> = {
+          url: baseUrl,
+          closeObserver: {
+            next: (event) => {
+              this.debugMode('closeObserver', event);
+              this.statStore.setConnected(false);
+              this.reconnect();
+            },
+          },
+          openObserver: {
+            next: (event) => {
+              this.debugMode('openObserver', event);
+              this.statStore.setConnected(true);
+              this.patchState({ connectError: undefined });
+            },
+          },
+        };
+
+        this.patchState({ wsSubjectConfig: config });
+      })
+    )
+  );
+
+  private readonly connect = this.effect((trigger$) =>
+    trigger$.pipe(
+      withLatestFrom(this.wsSubjectConfig$),
+      switchMap(([, config]) => {
+        assertDefined(config);
+        const socket = new WebSocketSubject(config);
+        this.webSocket = socket;
+        this.patchState({ socket });
+
+        return socket.pipe(
+          tap((msg) => {
+            this.statStore.bumpMessagesReceived();
+            this.messages.next(msg);
+          }),
+          catchError((err) => {
+            this.patchState({ connectError: err });
+            this.debugMode('error in connect', err);
+            return EMPTY;
+          })
+        );
+      })
+    )
+  );
+
+  private readonly reconnect = this.effect((trigger$) =>
+    trigger$.pipe(
+      withLatestFrom(this.retrySeconds$, this.maxRetries$),
+      exhaustMap(([, retrySeconds, maxRetries]) => {
+        return timer(retrySeconds * 1000).pipe(
+          withLatestFrom(this.isConnected$),
+          takeWhile(([, isConnected]) => {
+            if (!isConnected) {
+              this.statStore.bumpConnectionRetries();
+              this.debugMode(
+                'Attempting reconnect to websocket - try',
+                this.statStore.reconnectionTries
+              );
+            }
+            return (
+              !isConnected && this.statStore.reconnectionTries < maxRetries
+            );
+          }),
+          tap(() => this.connect())
+        );
+      })
+    )
+  );
+
+  public readonly disconnect = this.effect((trigger$) =>
+    trigger$.pipe(
+      withLatestFrom(this.isConnected$, this.socket$),
+      tap(([, isConnected, socket]) => {
+        if (isConnected && socket) {
+          socket.complete();
         }
-      },
-      () => console.log('WebSocket connection closed!')
-    );
-  }
-
-  private reconnect(): void {
-    this.reconnection$ = interval(this.reconnectInterval).pipe(
-      takeWhile(
-        (v, index) => index < this.reconnectAttempts && !this.websocket$
-      )
-    );
-
-    this.reconnection$.subscribe(
-      () => this.connect(),
-      null,
-      () => {
-        this.reconnection$ = null;
-        if (!this.websocket$) {
-          this.wsMessage$.complete();
-          this.connection$.complete();
-        }
-      }
-    );
-  }
+      })
+    )
+  );
 
   /*
    * on message event
    * */
   public on<T>(event: WSEvent): Observable<T | null> {
     if (event) {
-      return this.wsMessage$.pipe(
+      return this.messages$.pipe(
         filter((message: WsMessage) => message.event === event),
         map((message: WsMessage) => message.data as T)
       );
@@ -140,11 +182,17 @@ export class WebsocketService implements IWebsocketService {
   /*
    * on message to server
    * */
-  public send(event: string, data: any = {}): void {
-    if (event && this.isConnected && this.websocket$) {
-      this.websocket$.next(<any>JSON.stringify({ event, data }));
-    } else {
-      console.error('Send error!');
-    }
-  }
+  public readonly send = (event: WSEvent, data: any = {}) =>
+    this.effect((trigger$) =>
+      trigger$.pipe(
+        withLatestFrom(this.isConnected$, this.socket$),
+        tap(([, isConnected, socket]) => {
+          if (event && isConnected && socket) {
+            this.webSocket.next(<any>JSON.stringify({ event, data }));
+          } else {
+            console.error('Send error!');
+          }
+        })
+      )
+    );
 }
