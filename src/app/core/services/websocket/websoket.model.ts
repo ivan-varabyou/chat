@@ -2,8 +2,8 @@ import { Observable } from 'rxjs';
 import { WebSocketSubject, WebSocketSubjectConfig } from 'rxjs/webSocket';
 
 export interface IWebsocketService {
-  on<T>(event: WSEvent): Observable<T | null>;
-  send(event: WSEvent, data: string): void;
+  on<T>(event: string): Observable<T | null>;
+  send(event: string, data: string): void;
   status: Observable<boolean>;
 }
 
@@ -13,23 +13,8 @@ export interface WebSocketConfig {
   reconnectAttempts?: number;
 }
 
-export const enum WSEvent {
-  message = 'message',
-  privateMessage = 'privateMessage',
-  markAsRead = 'markAsRead',
-  recallMessage = 'recallMessage',
-  onlineUsers = 'onlineUsers',
-  messageHistory = 'messageHistory',
-  messageRecalled = 'messageRecalled',
-  messageUndoRecalled = 'messageUndoRecalled',
-  privateMessageRead = 'privateMessageRead',
-  messagesReadByUpdated = 'messagesReadByUpdated',
-  updateUserList = 'updateUserList',
-  unreadMessages = 'unreadMessages',
-}
-
 export interface WsMessage<T = any> {
-  event: WSEvent;
+  event: string;
   data: T;
 }
 
@@ -41,7 +26,6 @@ export interface WsConfig {
 }
 
 export interface SocketState {
-  baseUrl: string;
   connectError?: unknown;
   wsSubjectConfig?: WebSocketSubjectConfig<WsMessage>;
   socket?: WebSocketSubject<WsMessage>;

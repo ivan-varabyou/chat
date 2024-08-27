@@ -1,4 +1,4 @@
-import { Inject, inject, Injectable } from '@angular/core';
+import { computed, Inject, inject, Injectable, signal } from '@angular/core';
 import {
   catchError,
   EMPTY,
@@ -15,7 +15,7 @@ import {
   withLatestFrom,
 } from 'rxjs';
 import { WebSocketSubject, WebSocketSubjectConfig } from 'rxjs/webSocket';
-import { WsMessage, WSEvent, SocketState, WsConfig } from './websoket.model';
+import { WsMessage, SocketState, WsConfig } from './websoket.model';
 import { WEBSOCKET_CONFIG } from './websocket.tocken';
 import { ComponentStore } from '@ngrx/component-store';
 import { SocketStatsStore } from './socket-stats-store.services';
@@ -24,7 +24,9 @@ import { assertDefined } from '../../utils/assert/assert';
 @Injectable({
   providedIn: 'root',
 })
-export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
+export class WebsocketService<T, W> extends ComponentStore<
+  SocketState & WsConfig
+> {
   public statStore = inject(SocketStatsStore);
   // select
   private readonly baseUrl$ = this.select((state) => state.baseUrl);
@@ -36,17 +38,20 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
   /**
    * A stream of messages received from the websocket
    */
-  private messages = new Subject<WsMessage>();
-  private readonly messages$ = this.messages.asObservable();
+  private messages = new Subject<WsMessage<T>>();
   private readonly isConnected$ = this.statStore.isConnected$;
   private readonly socket$ = this.select((state) => state.socket);
-  private webSocket!: WebSocketSubject<WsMessage<any>>;
+  private webSocket!: WebSocketSubject<WsMessage<T>>;
 
   private readonly debugMode = (msg: string, ...args: any): void => {
     if (this.wsConfig.debugMode) {
       console.log(msg, ...args);
     }
   };
+
+  public readonly messages$ = this.messages.asObservable();
+  private readonly isConnectedSignal = signal(false);
+  public isConnected = computed(() => this.isConnectedSignal());
 
   constructor(@Inject(WEBSOCKET_CONFIG) private wsConfig: WsConfig) {
     super({
@@ -57,9 +62,6 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
     });
     this.statStore.setConnected(false);
     this.setUpWebSocketConfig();
-
-    // start connection websocket
-    // this.connect();
   }
 
   private readonly setUpWebSocketConfig = this.effect((trigger$) =>
@@ -74,6 +76,7 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
             next: (event) => {
               this.debugMode('closeObserver', event);
               this.statStore.setConnected(false);
+              this.isConnectedSignal.set(false);
               this.reconnect();
             },
           },
@@ -81,6 +84,7 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
             next: (event) => {
               this.debugMode('openObserver', event);
               this.statStore.setConnected(true);
+              this.isConnectedSignal.set(true);
               this.patchState({ connectError: undefined });
             },
           },
@@ -91,29 +95,47 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
     )
   );
 
-  private readonly connect = this.effect((trigger$) =>
-    trigger$.pipe(
-      withLatestFrom(this.wsSubjectConfig$),
-      switchMap(([, config]) => {
-        assertDefined(config);
-        const socket = new WebSocketSubject(config);
-        this.webSocket = socket;
-        this.patchState({ socket });
+  public readonly connect = (wsConfig?: WsConfig): void => {
+    if (!this.webSocket) {
+      if (wsConfig) {
+        this.patchState({
+          baseUrl: wsConfig.baseUrl,
+          retrySeconds: wsConfig.retrySeconds,
+          maxRetries: wsConfig.maxRetries,
+          debugMode: wsConfig.debugMode,
+        });
+      }
+      this.connectWs();
+    } else {
+      console.log('Already connected');
+    }
+  };
 
-        return socket.pipe(
-          tap((msg) => {
-            this.statStore.bumpMessagesReceived();
-            this.messages.next(msg);
-          }),
-          catchError((err) => {
-            this.patchState({ connectError: err });
-            this.debugMode('error in connect', err);
-            return EMPTY;
-          })
-        );
-      })
-    )
-  );
+  private readonly connectWs = () =>
+    this.effect((trigger$) =>
+      trigger$.pipe(
+        withLatestFrom(this.wsSubjectConfig$),
+        switchMap(([, config]) => {
+          assertDefined(config);
+
+          const socket = new WebSocketSubject(config);
+          this.webSocket = socket;
+          this.patchState({ socket });
+
+          return socket.pipe(
+            tap((msg) => {
+              this.statStore.bumpMessagesReceived();
+              this.messages.next(msg);
+            }),
+            catchError((err) => {
+              this.patchState({ connectError: err });
+              this.debugMode('error in connect', err);
+              return EMPTY;
+            })
+          );
+        })
+      )
+    );
 
   private readonly reconnect = this.effect((trigger$) =>
     trigger$.pipe(
@@ -153,11 +175,11 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
   /*
    * on message event
    * */
-  public on<T>(event: WSEvent): Observable<T | null> {
+  public on<T>(event: string): Observable<T | null> {
     if (event) {
       return this.messages$.pipe(
         filter((message: WsMessage) => message.event === event),
-        map((message: WsMessage) => message.data as T)
+        map((message: WsMessage<T>) => message.data as T)
       );
     }
     return of(null) as Observable<T | null>;
