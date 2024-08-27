@@ -1,20 +1,13 @@
-import { SocketStatsState } from './../websocket-ngrx/socket-stats-store.services.models';
-import { Inject, inject, Injectable, signal } from '@angular/core';
+import { Inject, inject, Injectable } from '@angular/core';
 import {
-  BehaviorSubject,
   catchError,
-  combineLatest,
-  distinctUntilChanged,
   EMPTY,
   exhaustMap,
   filter,
-  interval,
   map,
   Observable,
   of,
-  share,
   Subject,
-  SubscriptionLike,
   switchMap,
   takeWhile,
   tap,
@@ -22,18 +15,9 @@ import {
   withLatestFrom,
 } from 'rxjs';
 import { WebSocketSubject, WebSocketSubjectConfig } from 'rxjs/webSocket';
-import { WebsocketFactoryService } from './websocket-factory.services';
-import {
-  IWebsocketService,
-  WsMessage,
-  WebSocketConfig,
-  WSEvent,
-  SocketState,
-  WsConfig,
-} from './websoket.model';
+import { WsMessage, WSEvent, SocketState, WsConfig } from './websoket.model';
 import { WEBSOCKET_CONFIG } from './websocket.tocken';
 import { ComponentStore } from '@ngrx/component-store';
-import { trigger } from '@angular/animations';
 import { SocketStatsStore } from './socket-stats-store.services';
 import { assertDefined } from '../../utils/assert/assert';
 
@@ -75,7 +59,7 @@ export class WebsocketService extends ComponentStore<SocketState & WsConfig> {
     this.setUpWebSocketConfig();
 
     // start connection websocket
-    this.connect();
+    // this.connect();
   }
 
   private readonly setUpWebSocketConfig = this.effect((trigger$) =>
